@@ -20,7 +20,7 @@ app.get("/allUsers", (req, res) => {
 
 //REST APIs
 app.get("/api/allUsers", (req, res) => {
-  return res.json(allUsers);
+  return res.status(201).json(allUsers);
 });
 
 app.route("/api/user/:id")
