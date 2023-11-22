@@ -2,60 +2,94 @@ import express from "express";
 import users from "./MOCK_DATA.json" assert { type: "json" };
 import fs from "fs";
 import bodyParser from "body-parser";
+import mongoose from "mongoose";
 
 const app = express();
 const port = 8000;
-const allUsers = users;
+// const allUsers = users;
+
+mongoose
+  .connect("mongodb://localhost:27017/user-app")
+  .then(() => {
+    console.log("Mongo Connected");
+  })
+  .catch((err) => console.log("Mongo Error", err));
+const userSchema = new mongoose.Schema(
+  {
+    firstName: {
+      type: String,
+      required: true,
+    },
+    lastName: {
+      type: String,
+    },
+    email: {
+      type: String,
+      required: true,
+      unique:true
+    },
+    gender: {
+      type: String,
+    },
+  },
+  { versionKey: false, timestamps: true }
+);
+const User = mongoose.model("user", userSchema);
 
 app.use(bodyParser.json());
 
-app.get("/allUsers", (req, res) => {
+app.get("/allUsers", async (req, res) => {
+  const allUsers = await User.find({})  
   const htmlResp = `
     <ul>
-        ${allUsers.map((user) => `<li>${user.first_name}</li>`).join("")}
+        ${allUsers.map((user) => `<li>${user.firstName}</li>`).join("")}
     </ul>
     `;
   return res.send(htmlResp);
 });
 
 //REST APIs
-app.get("/api/allUsers", (req, res) => {
-  return res.status(201).json(allUsers);
+app.get("/api/allUsers", async (req, res) => {
+  const allUsers = await User.find({})
+  res.setHeader('X-User-Name','Test User')
+  return res.status(200).json(allUsers);
 });
 
-app.route("/api/user/:id")
-  .get((req, resp) => {
-    return resp.json(
-      allUsers.filter((user) => {
-        return user.id == req.params.id;
-      })
-    );
+app
+  .route("/api/user/:id")
+  .get(async (req, resp) => {
+    const user = await User.findById(req.params.id)
+    if(!user){
+      return resp.status(200).json({msg:"User not found"})
+    }
+    return resp.status(200).json(user);
   })
-  .delete((req, res) => {
-    let deletedUser = {};
-    const newUsers = allUsers.filter((user) => {
-      if (user.id === Number(req.params.id)){
-        deletedUser = user;
-        return false;
-      }
-      return true;
-    });
-    fs.writeFile("./MOCK_DATA.json", JSON.stringify(newUsers), (err, resp) => {
-      res.send(deletedUser.first_name);
-    });
-  });
+  .delete(async(req, res) => {
+    const user = await User.findByIdAndDelete(req.params.id)
+    console.log("Deleted User", user)
+    return res.status(201).json(user)    
+  })
+  .patch(async (req, res)=>{
+    const user = await User.findByIdAndUpdate(req.params.id,{
+      lastName:req.body.lastName
+    })
+    console.log("Updated User:", user)
+    return res.status(200).json({msg:'Success'})
+  })
 
-app.post("/api/addUser", (req, resp) => {
+app.post("/api/addUser", async (req, resp) => {
   let user = req.body;
-  console.log("req user", user);
-  user.id = allUsers.length + 1;
-  console.log("req user", user);
+  // allUsers.push(user);
 
-  allUsers.push(user);
-
-  fs.writeFile("./MOCK_DATA.json", JSON.stringify(allUsers), (err, res) => {
-    resp.json(user.id);
+  const result = await User.create({
+    firstName: user.first_name,
+    lastName: user?.last_name,
+    email: user.email,
+    gender: user.gender,
   });
+
+  console.log("Result", result);
+  return resp.status(201).json({ msg: "Success" });
 });
 
 app.listen(port, () => console.log("Listening on Port 8000..."));
